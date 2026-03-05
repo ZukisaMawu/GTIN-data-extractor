@@ -403,7 +403,7 @@ if uploaded_files:
                 st.error("Failed to process files. Please check the file format.")
 
 else:
-    st.info("Upload JSON files to get started")
+    st.info("📤 Upload JSON files to get started")
     
     # Instructions
     st.markdown("""
@@ -412,8 +412,13 @@ else:
     2. **Configure** translation settings in the sidebar (optional)
     3. **Click** the "Process Files" button
     4. **Download** the generated Excel file
-    """)
     
+    """)
+
+# Footer
+st.markdown("---")
+st.markdown("Built with Streamlit • GTIN Data Extractor v2.0")
+
 
 
 
