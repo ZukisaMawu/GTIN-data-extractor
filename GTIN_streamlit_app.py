@@ -324,14 +324,13 @@ if uploaded_files:
 else:
     st.info("Upload JSON files to get started")
     
-    # # Instructions
-    # st.markdown("""
-    # ### How to use:
-    # 1. **Upload** your JSON files using the file uploader above
-    # 2. **Configure** translation settings in the sidebar (optional)
-    # 3. **Click** the "Process Files" button
-    # 4. **Download** the generated Excel file
-    
+    # Instructions
+    st.markdown("""
+    ### How to use:
+    1. **Upload** your JSON files using the file uploader above
+    2. **Click** the "Process Files" button
+    3. **Download** the generated Excel file
+    """)
     # ### Features:
     # - Combines multiple JSON files into one Excel file
     # - Extracts GTIN, brand, product, and license information
@@ -344,3 +343,4 @@ else:
 st.markdown("---")
 
 st.markdown("GTIN Data Extractor")
+
