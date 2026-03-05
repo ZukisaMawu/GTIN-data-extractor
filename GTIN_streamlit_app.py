@@ -124,7 +124,6 @@ def add_translation_columns(df, fields_to_translate=['Brand_Name', 'Product_Desc
         if field in df.columns:
             df[f'{field}_Language'] = None
             df[f'{field}_Original'] = None
-            df[f'{field}_Translation_Status'] = 'Not Needed'  # Track translation status
     
     for field in fields_to_translate:
         if field not in df.columns:
@@ -138,15 +137,13 @@ def add_translation_columns(df, fields_to_translate=['Brand_Name', 'Product_Desc
                     
                     if lang != 'en':
                         needs_translation.add((idx, field, value, lang))
-                        df.at[idx, f'{field}_Translation_Status'] = 'Pending'
                 except:
                     df.at[idx, f'{field}_Language'] = None
-                    df.at[idx, f'{field}_Translation_Status'] = 'Detection Failed'
     
     return df, needs_translation
 
 def translate_batch(df, needs_translation, max_workers=3, progress_bar=None):
-    """Translate records using parallel processing with verification."""
+    """Translate records using parallel processing."""
     if not needs_translation:
         return df
     
@@ -155,26 +152,9 @@ def translate_batch(df, needs_translation, max_workers=3, progress_bar=None):
         try:
             time.sleep(0.05)
             translated = GoogleTranslator(source=lang, target='en').translate(text)
-            
-            # Verify the translation actually worked
-            if translated and translated != text:
-                try:
-                    # Check if translated text is actually in English
-                    translated_lang = detect(translated)
-                    if translated_lang == 'en':
-                        return (idx, field, text, translated, 'Success')
-                    else:
-                        # Translation produced non-English text
-                        return (idx, field, text, None, 'Failed - Still Non-English')
-                except:
-                    # Can't detect language of translation, assume it worked
-                    return (idx, field, text, translated, 'Success')
-            else:
-                # Translation returned same text or empty
-                return (idx, field, text, None, 'Failed - No Translation')
-                
+            return (idx, field, text, translated, True)
         except Exception as e:
-            return (idx, field, text, None, f'Failed - Error: {str(e)}')
+            return (idx, field, text, None, False)
     
     completed = 0
     total = len(needs_translation)
@@ -183,70 +163,17 @@ def translate_batch(df, needs_translation, max_workers=3, progress_bar=None):
         futures = {executor.submit(translate_item, item): item for item in needs_translation}
         
         for future in as_completed(futures):
-            idx, field, original, translated, status = future.result()
+            idx, field, original, translated, success = future.result()
             
-            if status == 'Success' and translated:
+            if success and translated:
                 df.at[idx, f'{field}_Original'] = original
                 df.at[idx, field] = translated
-                df.at[idx, f'{field}_Translation_Status'] = 'Success'
-            else:
-                # Translation failed - mark the field
-                df.at[idx, f'{field}_Translation_Status'] = status
-                df.at[idx, field] = 'Translation Failed'
             
             completed += 1
             if progress_bar:
                 progress_bar.progress(completed / total)
     
     return df
-
-def clean_untranslatable_records(df, critical_fields=['Brand_Name', 'Product_Description', 'License_Name']):
-    """Remove records where critical fields failed translation."""
-    initial_count = len(df)
-    rows_to_drop = []
-    
-    for idx, row in df.iterrows():
-        should_drop = False
-        
-        for field in critical_fields:
-            status_col = f'{field}_Translation_Status'
-            
-            # Check if field exists and has translation status
-            if status_col in df.columns:
-                status = row[status_col]
-                field_value = row[field]
-                
-                # Drop if:
-                # 1. Translation failed AND field had actual content (not N/A or empty)
-                # 2. Field shows "Translation Failed" message
-                if (status and status.startswith('Failed')) or (field_value == 'Translation Failed'):
-                    # Only drop if the original field had content
-                    original_col = f'{field}_Original'
-                    if original_col in df.columns and pd.notna(row[original_col]):
-                        should_drop = True
-                        break
-        
-        if should_drop:
-            rows_to_drop.append(idx)
-    
-    if rows_to_drop:
-        df = df.drop(rows_to_drop)
-        removed_count = len(rows_to_drop)
-        st.warning(f"Removed {removed_count} records with untranslatable content (kept {len(df)} valid records)")
-    
-    return df
-
-def prepare_output_dataframe(df):
-    """Prepare clean output with only specified columns."""
-    output_columns = ['GTIN', 'Record_Status', 'Brand_Name', 'Product_Description', 'License_Name', 'Error_Message']
-    
-    # Select only the columns that exist in the dataframe
-    available_columns = [col for col in output_columns if col in df.columns]
-    
-    # Create clean output dataframe
-    output_df = df[available_columns].copy()
-    
-    return output_df
 
 def process_files(uploaded_files, enable_translation=True, translation_workers=3):
     """Process uploaded JSON files."""
@@ -285,19 +212,12 @@ def process_files(uploaded_files, enable_translation=True, translation_workers=3
             translation_progress = st.progress(0)
             df = translate_batch(df, needs_translation, max_workers=translation_workers, progress_bar=translation_progress)
             progress_text.text(f"✓ Translation complete!")
-            
-            # Phase 3: Clean up untranslatable records
-            progress_text.text("Removing untranslatable records...")
-            df = clean_untranslatable_records(df)
         else:
             progress_text.text("✓ No translation needed - all text is in English!")
     
     progress_bar.empty()
     
-    # Prepare clean output
-    output_df = prepare_output_dataframe(df)
-    
-    return output_df, df  # Return both clean output and full data for statistics
+    return df
 
 # Streamlit App UI
 st.title("GTIN Data Extractor")
@@ -329,67 +249,66 @@ if uploaded_files:
     # Process button
     if st.button("Process Files", type="primary"):
         with st.spinner("Processing..."):
-            result = process_files(uploaded_files, enable_translation, translation_workers)
+            df = process_files(uploaded_files, enable_translation, translation_workers)
             
-            if result is not None:
-                output_df, full_df = result
+            if df is not None:
                 st.success("✓ Processing complete!")
                 
                 # Summary statistics
                 col1, col2, col3 = st.columns(3)
                 
                 with col1:
-                    st.metric("Total Records", len(output_df))
+                    st.metric("Total Records", len(df))
                 
                 with col2:
-                    if 'Record_Status' in output_df.columns:
-                        active_count = len(output_df[output_df['Record_Status'] == 'ACTIVE'])
+                    if 'Record_Status' in df.columns:
+                        active_count = len(df[df['Record_Status'] == 'ACTIVE'])
                         st.metric("Active Records", active_count)
                 
                 with col3:
-                    if 'Record_Status' in output_df.columns:
-                        error_count = len(output_df[output_df['Record_Status'] == 'ERROR'])
+                    if 'Record_Status' in df.columns:
+                        error_count = len(df[df['Record_Status'] == 'ERROR'])
                         st.metric("Error Records", error_count)
                 
                 # Status breakdown
-                if 'Record_Status' in output_df.columns:
+                if 'Record_Status' in df.columns:
                     st.subheader("Record Status Breakdown")
-                    status_counts = output_df['Record_Status'].value_counts()
+                    status_counts = df['Record_Status'].value_counts()
                     st.bar_chart(status_counts)
                 
                 # Translation statistics
                 if enable_translation:
                     st.subheader("Translation Statistics")
                     translation_stats = []
-                    
                     for field in ['Brand_Name', 'Product_Description', 'License_Name']:
-                        status_col = f'{field}_Translation_Status'
-                        if status_col in full_df.columns:
-                            success = len(full_df[full_df[status_col] == 'Success'])
-                            failed = len(full_df[full_df[status_col].str.startswith('Failed', na=False)])
-                            
-                            if success > 0:
-                                translation_stats.append(f"✓ {field}: {success} successful translations")
-                            if failed > 0:
-                                translation_stats.append(f"✗ {field}: {failed} failed translations (removed)")
+                        lang_col = f'{field}_Language'
+                        if lang_col in df.columns:
+                            non_en = df[df[lang_col].notna() & (df[lang_col] != 'en')][lang_col].count()
+                            if non_en > 0:
+                                translation_stats.append(f"{field}: {non_en} translations")
                     
                     if translation_stats:
                         for stat in translation_stats:
-                            st.text(stat)
+                            st.text(f"• {stat}")
                     else:
-                        st.text("✓ No translations needed - all text was in English")
+                        st.text("No translations needed - all text was in English")
                 
                 # Preview data
-                st.subheader("Data Preview (Clean Output)")
-                st.dataframe(output_df.head(10), use_container_width=True)
+                st.subheader("Data Preview")
+                cols_to_show = [col for col in ['GTIN', 'Record_Status', 'Brand_Name', 'Product_Description', 'License_Name', 'Error_Message'] if col in df.columns]
+                st.dataframe(df[cols_to_show].head(10), use_container_width=True)
                 
                 # Download button
                 st.subheader("Download Results")
                 
+                # Select only the desired columns for output
+                output_columns = ['GTIN', 'Record_Status', 'Brand_Name', 'Product_Description', 'License_Name', 'Error_Message']
+                df_output = df[output_columns].copy()
+                
                 # Create Excel file in memory
                 output = io.BytesIO()
                 with pd.ExcelWriter(output, engine='openpyxl') as writer:
-                    output_df.to_excel(writer, index=False, sheet_name='GTIN Data')
+                    df_output.to_excel(writer, index=False, sheet_name='GTIN Data')
                 
                 excel_data = output.getvalue()
                 
@@ -403,22 +322,25 @@ if uploaded_files:
                 st.error("Failed to process files. Please check the file format.")
 
 else:
-    st.info("📤 Upload JSON files to get started")
+    st.info("Upload JSON files to get started")
     
-    # Instructions
-    st.markdown("""
-    ### How to use:
-    1. **Upload** your JSON files using the file uploader above
-    2. **Configure** translation settings in the sidebar (optional)
-    3. **Click** the "Process Files" button
-    4. **Download** the generated Excel file
+    # # Instructions
+    # st.markdown("""
+    # ### How to use:
+    # 1. **Upload** your JSON files using the file uploader above
+    # 2. **Configure** translation settings in the sidebar (optional)
+    # 3. **Click** the "Process Files" button
+    # 4. **Download** the generated Excel file
     
-    """)
+    # ### Features:
+    # - Combines multiple JSON files into one Excel file
+    # - Extracts GTIN, brand, product, and license information
+    # - Automatic language detection and translation
+    # - Error handling and validation
+    # - Progress tracking
+    # """)
 
 # Footer
 st.markdown("---")
-st.markdown("Built with Streamlit • GTIN Data Extractor v2.0")
 
-
-
-
+st.markdown("GTIN Data Extractor")
