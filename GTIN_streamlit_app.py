@@ -318,7 +318,7 @@ if uploaded_files:
                 st.error("Failed to process files. Please check the file format.")
 
 else:
-    st.info("👆 Upload JSON files to get started")
+    st.info("Upload JSON files to get started")
     
     # Instructions
     st.markdown("""
@@ -329,13 +329,14 @@ else:
     4. **Download** the generated Excel file
     
     ### Features:
-    - ✅ Combines multiple JSON files into one Excel file
-    - ✅ Extracts GTIN, brand, product, and license information
-    - ✅ Automatic language detection and translation
-    - ✅ Error handling and validation
-    - ✅ Progress tracking
+    - Combines multiple JSON files into one Excel file
+    - Extracts GTIN, brand, product, and license information
+    - Automatic language detection and translation
+    - Error handling and validation
+    - Progress tracking
     """)
 
 # Footer
 st.markdown("---")
+
 st.markdown("Built with Streamlit • GTIN Data Extractor v1.0")
