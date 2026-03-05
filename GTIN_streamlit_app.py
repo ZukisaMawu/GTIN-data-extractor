@@ -220,8 +220,8 @@ def process_files(uploaded_files, enable_translation=True, translation_workers=3
     return df
 
 # Streamlit App UI
-st.title("📦 GTIN Data Extractor")
-st.markdown("Upload JSON files to extract and combine GTIN data into an Excel file")
+st.title("GTIN Data Extractor")
+st.markdown("Upload JSON files to extract and combine data into an Excel file")
 
 # Sidebar settings
 st.sidebar.header("Settings")
@@ -309,7 +309,7 @@ if uploaded_files:
                 excel_data = output.getvalue()
                 
                 st.download_button(
-                    label="📥 Download Excel File",
+                    label="Download Excel File",
                     data=excel_data,
                     file_name="gtin_combined_output.xlsx",
                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
@@ -340,3 +340,4 @@ else:
 st.markdown("---")
 
 st.markdown("Built with Streamlit • GTIN Data Extractor v1.0")
+
