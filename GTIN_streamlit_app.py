@@ -412,7 +412,8 @@ else:
     2. **Configure** translation settings in the sidebar (optional)
     3. **Click** the "Process Files" button
     4. **Download** the generated Excel file
+    """)
     
-    
+
 
 
