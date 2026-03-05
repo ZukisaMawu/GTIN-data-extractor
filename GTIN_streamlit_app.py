@@ -413,19 +413,6 @@ else:
     3. **Click** the "Process Files" button
     4. **Download** the generated Excel file
     
-    ### Features:
-    - Combines multiple JSON files into one Excel file
-    - Extracts GTIN, brand, product, and license information
-    - Automatic language detection and translation
-    - **Smart cleanup**: Removes records with untranslatable content (e.g., Chinese that fails translation)
-    - **Keeps successful translations**: German, Greek, and other languages that translate properly
-    - **Clean output**: Only essential columns (GTIN, Record_Status, Brand_Name, Product_Description, License_Name, Error_Message)
-    - Error handling and validation
-    - Progress tracking
     
-    ### What gets removed:
-    - Records where Brand_Name, Product_Description, or License_Name cannot be translated to English
-    - Records where translation returns non-English text (e.g., untranslatable Chinese characters)
-    - **Note**: GTIN is always preserved as the main identifier
-    """)
+
 
